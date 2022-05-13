@@ -191,6 +191,7 @@ if 'WORLD_SIZE' in os.environ:
     args.world_size = int(os.environ['WORLD_SIZE'])
     print("Total world size: ", int(os.environ['WORLD_SIZE']))
 
+# args.world_size = 3
 torch.cuda.set_device(args.local_rank)
 print('My Rank:', args.local_rank)
 # Initialize distributed communication

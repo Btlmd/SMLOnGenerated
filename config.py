@@ -67,7 +67,7 @@ __C.STRICTBORDERCLASS = None
 #Attribute Dictionary for Dataset
 __C.DATASET = AttrDict()
 #Cityscapes Dir Location
-__C.DATASET.CITYSCAPES_DIR = '/home/nas1_userB/dataset/cityscapes'
+__C.DATASET.CITYSCAPES_DIR = '/home/DISCOVER_summer2022/liumd/sml/cityscapes'
 #SDC Augmented Cityscapes Dir Location
 __C.DATASET.CITYSCAPES_AUG_DIR = ''
 #Number of splits to support

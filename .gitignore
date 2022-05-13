@@ -140,3 +140,4 @@ pretrained/
 
 # json files
 *.json
+*.pth

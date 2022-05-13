@@ -22,4 +22,6 @@ python -m torch.distributed.launch --nproc_per_node=2 train.py \
    --date 0000 \
    --exp r101_os8_base_60K \
    --ckpt ./logs/ \
-   --tb_path ./logs/
+   # --tb_path ./logs/ \
+   # --local_rank 0 \
+   # --dist_url env://
