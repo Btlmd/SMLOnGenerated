@@ -166,10 +166,10 @@ def evaluate_eval(args, net, optimizer, scheduler, val_loss, hist, dump_images, 
                         dataset_name, args.last_record[dataset_name]['epoch'],
                         args.last_record[dataset_name]['mean_iu'])
             last_snapshot = os.path.join(args.exp_path, last_snapshot)
-            try:
-                os.remove(last_snapshot)
-            except OSError:
-                pass
+            # try:
+            #     os.remove(last_snapshot)
+            # except OSError:
+            #     pass
 
         last_snapshot = 'last_{}_epoch_{}_mean-iu_{:.5f}.pth'.format(dataset_name, epoch, mean_iu)
         last_snapshot = os.path.join(args.exp_path, last_snapshot)
@@ -272,8 +272,8 @@ def print_evaluate_results(hist, iu, dataset_name=None, dataset=None):
     logging.info('label_id      label    iU    Precision Recall TP     FP    FN')
     modified_iu = 0
     for idx, i in enumerate(iu):
-        if idx > 18:
-            continue
+        # if idx > 24:
+        #     continue
         print(i)
         modified_iu += i
 
@@ -292,7 +292,7 @@ def print_evaluate_results(hist, iu, dataset_name=None, dataset=None):
             iu_true_positive[idx] / (iu_true_positive[idx] + iu_false_negative[idx]))
         logging.info('{}    {}   {}  {}     {}  {}   {}   {}'.format(
             idx_string, class_name, iu_string, precision, recall, tp, fp, fn))
-    print(f'Final mIoU: {modified_iu / 19.}')
+    # print(f'Final mIoU: {modified_iu / 24.}')
 
 
 

@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 # Example on Cityscapes
 python -m torch.distributed.launch --nproc_per_node=1 calculate_statistics.py \
-    --dataset cityscapes \
+    --dataset selfgen \
+    --val_dataset selfgen \
     --arch network.deepv3.DeepR101V3PlusD_OS8 \
     --city_mode 'train' \
     --lr_schedule poly \
     --lr 0.01 \
     --max_cu_epoch 10000 \
     --class_uniform_pct 0.5 \
-    --class_uniform_tile 1024 \
+    --class_uniform_tile 720 \
     --poly_exp 0.9 \
-    --snapshot ./pretrained/r101_os8_base_cty.pth \
-    --crop_size 768 \
+    --snapshot /DATA2/gaoha/liumd/sml/sml/c_selfgen/ckpt/0705/r101_os8_base_60K/07_05_15/last_None_epoch_209_mean-iu_0.00000.pth \
+    --crop_size 540 \
     --scale_min 0.5 \
     --scale_max 2.0 \
     --rrotate 0 \

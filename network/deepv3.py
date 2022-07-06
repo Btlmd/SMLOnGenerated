@@ -37,6 +37,8 @@ from kornia.morphology import dilation, erosion
 
 import torchvision.models as models
 
+from IPython import embed
+
 
 # NOTE(shjung13): These are for obtaining non-boundary masks
 # We calculate the boundary mask by subtracting the eroded prediction map from the dilated one
@@ -591,6 +593,8 @@ class DeepV3Plus(nn.Module):
         dec1 = self.final1(dec0)
         dec2 = self.final2(dec1)
         main_out = Upsample(dec2, x_size[2:])
+
+        # embed()
 
         if self.score_mode == 'msp':
             anomaly_score, prediction = nn.Softmax(dim=1)(main_out.detach()).max(1)

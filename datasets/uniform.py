@@ -55,17 +55,27 @@ def class_centroids_image(item, tile_size, num_classes, id2trainid):
     """
     image_fn, label_fn = item
     centroids = defaultdict(list)
-    mask = np.array(Image.open(label_fn))
-    if len(mask.shape) == 3:
-        # Remove instance mask
-        mask = mask[:,:,0]
-    image_size = mask.shape
+    original_mask = np.array(Image.open(label_fn))
+    # if len(mask.shape) == 3:
+    #     # Remove instance mask
+    #     mask = mask[:,:,0]
+    # print(original_mask.shape)
+    image_size = original_mask.shape[:2]
     tile_locations = calc_tile_locations(tile_size, image_size)
+    mask = np.full(image_size, -1, dtype=int)
 
-    mask_copy = mask.copy()
+    mask_copy = original_mask.astype(np.uint32)
+    mask_copy = mask_copy[:,:,0] + mask_copy[:,:,1] * 256 + mask_copy[:,:,2] * 256 * 256
+    
     if id2trainid:
         for k, v in id2trainid.items():
             mask[mask_copy == k] = v
+
+    # import IPython
+    # IPython.embed(header="centroid")
+
+    assert mask.min() > 0, "original image should be fully labelled @ " + item
+    assert mask.max() < 23, "no anormaly should be in original image @ " + item
 
     for x_offs, y_offs in tile_locations:
         patch = mask[y_offs:y_offs + tile_size, x_offs:x_offs + tile_size]
@@ -189,7 +199,7 @@ def pooled_class_centroids_all(items, num_classes, id2trainid, tile_size=1024):
                                    num_classes=num_classes,
                                    id2trainid=id2trainid,
                                    tile_size=tile_size)
-
+    # class_centroids_item(items[0])
     centroids = defaultdict(list)
     new_centroids = pool.map(class_centroids_item, items)
     pool.close()
@@ -280,9 +290,13 @@ def build_epoch(imgs, centroids, num_classes, class_uniform_pct):
 
     # now add uniform sampling
     for class_id in range(num_classes):
+        if class_id not in centroids:
+            continue
         string_format = "cls %d len %d"% (class_id, len(centroids[class_id]))
         logging.info(string_format)
     for class_id in range(num_classes):
+        if class_id not in centroids:
+            continue
         centroid_len = len(centroids[class_id])
         if centroid_len == 0:
             pass

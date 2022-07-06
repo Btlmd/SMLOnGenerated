@@ -233,44 +233,44 @@ def main():
         else:
             epoch = 0
 
-    print("#### iteration", i)
-    torch.cuda.empty_cache()
-    # Main Loop
-    # for epoch in range(args.start_epoch, args.max_epoch):
+    # print("#### iteration", i)
+    # torch.cuda.empty_cache()
+    # # Main Loop
+    # # for epoch in range(args.start_epoch, args.max_epoch):
 
-    while i < args.max_iter:
-        # Update EPOCH CTR
-        cfg.immutable(False)
-        cfg.ITER = i
-        cfg.immutable(True)
+    # while i < args.max_iter:
+    #     # Update EPOCH CTR
+    #     cfg.immutable(False)
+    #     cfg.ITER = i
+    #     cfg.immutable(True)
 
-        i = train(train_loader, net, optim, epoch, writer, scheduler, args.max_iter)
-        train_loader.sampler.set_epoch(epoch + 1)
-        if i % args.val_interval == 0:
-            for dataset, val_loader in val_loaders.items():
-                validate(val_loader, dataset, net, criterion_val, optim, scheduler, epoch, writer, i)
-        else:
-            if args.local_rank == 0:
-                print("Saving pth file...")
-                evaluate_eval(args, net, optim, scheduler, None, None, [],
-                            writer, epoch, "None", None, i, save_pth=True)
+    #     i = train(train_loader, net, optim, epoch, writer, scheduler, args.max_iter)
+    #     train_loader.sampler.set_epoch(epoch + 1)
+    #     if i % args.val_interval == 0:
+    #         for dataset, val_loader in val_loaders.items():
+    #             validate(val_loader, dataset, net, criterion_val, optim, scheduler, epoch, writer, i)
+    #     else:
+    #         if args.local_rank == 0:
+    #             print("Saving pth file...")
+    #             evaluate_eval(args, net, optim, scheduler, None, None, [],
+    #                         writer, epoch, "None", None, i, save_pth=True)
 
-        if args.class_uniform_pct:
-            if epoch >= args.max_cu_epoch:
-                train_obj.build_epoch(cut=True)
-                # if args.apex:
-                train_loader.sampler.set_num_samples()
-            else:
-                train_obj.build_epoch()
-        epoch += 1
+    #     if args.class_uniform_pct:
+    #         if epoch >= args.max_cu_epoch:
+    #             train_obj.build_epoch(cut=True)
+    #             # if args.apex:
+    #             train_loader.sampler.set_num_samples()
+    #         else:
+    #             train_obj.build_epoch()
+    #     epoch += 1
 
     # Validation after epochs
     for dataset, val_loader in val_loaders.items():
         validate(val_loader, dataset, net, criterion_val, optim, scheduler, epoch, writer, i)
 
-    for dataset, val_loader in extra_val_loaders.items():
-        print("Extra validating... This won't save pth file")
-        validate(val_loader, dataset, net, criterion_val, optim, scheduler, epoch, writer, i, save_pth=False)
+    # for dataset, val_loader in extra_val_loaders.items():
+    #     print("Extra validating... This won't save pth file")
+    #     validate(val_loader, dataset, net, criterion_val, optim, scheduler, epoch, writer, i, save_pth=False)
 
 
 def train(train_loader, net, optim, curr_epoch, writer, scheduler, max_iter):

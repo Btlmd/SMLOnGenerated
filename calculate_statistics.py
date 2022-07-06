@@ -17,6 +17,7 @@ import optimizer
 import time
 import numpy as np
 import random
+from tqdm import tqdm
 
 # Argument Parser
 parser = argparse.ArgumentParser(description='Semantic Segmentation')
@@ -246,7 +247,7 @@ def calculate_statistics(train_loader, net):
     pred_list = None
     max_class_mean = {}
     print("Calculating statistics...")
-    for i, data in enumerate(train_loader):
+    for i, data in tqdm(enumerate(train_loader)):
         inputs = data[0]
 
         inputs = inputs.cuda()
@@ -262,7 +263,7 @@ def calculate_statistics(train_loader, net):
             pred_list = torch.cat((pred_list, outputs.cpu()), 0)
         del outputs
 
-        if i % 50 == 49 or i == len(train_loader) - 1:
+        if i == 99 or i == len(train_loader) - 1:
             pred_list = pred_list.transpose(1, 3)
             pred_list, prediction = pred_list.max(3)
 
@@ -275,8 +276,8 @@ def calculate_statistics(train_loader, net):
                 mean = class_max_logits[c].mean(dim=0)
                 var = class_max_logits[c].var(dim=0)
 
-                mean_dict[c] = mean.item()
-                var_dict[c] = var.item()
+                mean_dict[c] = mean.item() if not np.isnan(mean.item()) else 0
+                var_dict[c] = var.item() if not np.isnan(var.item()) else 0
 
             print(f"class mean: {mean_dict}")
             print(f"class var: {var_dict}")

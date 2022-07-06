@@ -333,10 +333,15 @@ def resnet101(pretrained=True, **kwargs):
     """
     model = ResNet3X3(Bottleneck, [3, 4, 23, 3], **kwargs)
     if pretrained:
+        # load params
+        # model.load_state_dict(new_state_dict)
         # model.load_state_dict(model_zoo.load_url(model_urls['resnet101']))
-        print("########### pretrained ##############")
-        # model.load_state_dict(torch.load('./pretrained/resnet101-imagenet.pth', map_location="cpu"))
-        mynn.forgiving_state_restore(model, torch.load('./trainings/resnet101-hub.pth', map_location="cpu"))
+        model = mynn.forgiving_state_restore(model, model_zoo.load_url(model_urls['resnet101']))
+        # model = mynn.forgiving_state_restore(model,"/home/DISCOVER_summer2022/liumd/sml/trainings/resnet101-hub.pth")
+        # print("########### pretrained ##############")
+        # model.load_state_dict(torch.load('/home/DISCOVER_summer2022/liumd/sml/logs11/0000/r101_os8_base_60K/05_13_19/best_cityscapes_epoch_81_mean-iu_0.77899.pth', map_location="cpu")['state_dict'])
+        # print("Here!")
+        # mynn.forgiving_state_restore(model, torch.load('/home/DISCOVER_summer2022/liumd/sml/pretrained/last_cityscapes_epoch_81_mean-iu_0.78138.pth', map_location="cpu"))
     return model
 
 

@@ -3,6 +3,7 @@ Dataset setup and loaders
 """
 from datasets import cityscapes
 from datasets import nullloader
+from datasets import selfgen
 
 from datasets import multi_loader
 from datasets.sampler import DistributedSampler
@@ -15,7 +16,7 @@ from torch.utils.data import DataLoader, ConcatDataset
 import torch
 
 
-num_classes = 19
+num_classes = selfgen.num_classes
 ignore_label = 255
 
 
@@ -124,6 +125,11 @@ def create_extra_val_loader(args, dataset, val_input_transform, target_transform
                                         cv_split=args.cv)
     elif dataset == 'null_loader':
         val_set = nullloader.nullloader(args.crop_size)
+    elif dataset == "selfgen":
+        val_set = selfgen.SelfGen('fine', 'val', 0,
+                                        transform=val_input_transform,
+                                        target_transform=target_transform,
+                                        cv_split=args.cv)
     else:
         raise Exception('Dataset {} is not supported'.format(dataset))
 
@@ -166,6 +172,51 @@ def setup_loaders(args):
     train_sets = []
     val_sets = []
     val_dataset_names = []
+
+    if 'selfgen' in args.dataset:
+        dataset = selfgen
+        city_mode = args.city_mode #'train' ## Can be trainval
+        city_quality = 'fine'
+        train_joint_transform_list, train_joint_transform = get_train_joint_transform(args, dataset)
+        train_input_transform, val_input_transform = get_input_transforms(args, dataset)
+        target_transform, target_train_transform, target_aux_train_transform = get_target_transforms(args, dataset)
+
+        if args.class_uniform_pct:
+            if args.coarse_boost_classes:
+                coarse_boost_classes = \
+                    [int(c) for c in args.coarse_boost_classes.split(',')]
+            else:
+                coarse_boost_classes = None
+
+            train_set = dataset.SelfGenUniform(
+                city_quality, city_mode, args.maxSkip,
+                joint_transform_list=train_joint_transform_list,
+                transform=train_input_transform,
+                target_transform=target_train_transform,
+                target_aux_transform=target_aux_train_transform,
+                dump_images=args.dump_augmentation_images,
+                cv_split=args.cv,
+                class_uniform_pct=args.class_uniform_pct,
+                class_uniform_tile=args.class_uniform_tile,
+                test=args.test_mode,
+                coarse_boost_classes=coarse_boost_classes)
+        else:
+            # train_set = dataset.CityScapes(
+            #     city_quality, city_mode, 0,
+            #     joint_transform=train_joint_transform,
+            #     transform=train_input_transform,
+            #     target_transform=target_train_transform,
+            #     target_aux_transform=target_aux_train_transform,
+            #     dump_images=args.dump_augmentation_images)
+            raise NotImplemented
+
+        val_set = dataset.SelfGen('fine', 'val', 0,
+                                     transform=val_input_transform,
+                                     target_transform=target_transform,
+                                     cv_split=args.cv)
+        train_sets.append(train_set)
+        val_sets.append(val_set)
+        val_dataset_names.append('selfgen')
 
     if 'cityscapes' in args.dataset:
         dataset = cityscapes

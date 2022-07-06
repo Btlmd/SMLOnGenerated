@@ -74,7 +74,8 @@ def get_optimizer(args, net):
         scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda1)
     else:
         raise ValueError('unknown lr schedule {}'.format(args.lr_schedule))
-
+    print(optimizer)
+    print(scheduler)
     return optimizer, scheduler
 
 

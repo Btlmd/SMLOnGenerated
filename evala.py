@@ -4,6 +4,7 @@ Evaluation Scripts
 from __future__ import absolute_import
 from __future__ import division
 from collections import namedtuple, OrderedDict
+import imp
 from network import mynn
 import argparse
 import logging
@@ -12,6 +13,7 @@ import torch
 import time
 import numpy as np
 
+from IPython import embed
 from config import cfg, assert_and_infer_cfg
 import network
 import optimizer
@@ -21,13 +23,13 @@ from tqdm import tqdm
 from PIL import Image
 from sklearn.metrics import roc_auc_score, roc_curve, auc, precision_recall_curve, average_precision_score
 import torchvision.transforms as standard_transforms
-
+import math
 #from network.deepv3 import BoundarySuppressionWithSmoothing as custom_BoundarySuppressionWithSmoothing
 
 
 
 dirname = os.path.dirname(__file__)
-pretrained_model_path = os.path.join(dirname, '/home/DISCOVER_summer2022/liumd/sml/pretrained/last_None_epoch_54_mean-iu_0.00000.pth')
+pretrained_model_path = os.path.join(dirname, '')
 
 # Argument Parser
 parser = argparse.ArgumentParser(description='Semantic Segmentation')
@@ -35,7 +37,7 @@ parser.add_argument('--lr', type=float, default=0.01)
 parser.add_argument('--arch', type=str, default='network.deepv3.DeepR101V3PlusD_OS8',
                     help='Network architecture. We have DeepSRNX50V3PlusD (backbone: ResNeXt50) \
                     and deepWV3Plus (backbone: WideResNet38).')
-parser.add_argument('--dataset', type=str, default='cityscapes',
+parser.add_argument('--dataset', type=str, default='selfgen',
                     help='possible datasets for statistics; cityscapes')
 parser.add_argument('--fp16', action='store_true', default=False,
                     help='Use Nvidia Apex AMP')
@@ -105,9 +107,16 @@ parser.add_argument('--smoothing_kernel_dilation', type=int, default=6,
 # FS LostAndFound data structure cannot be transformed to the desired structure
 # Therefore, when using it, extract images and masks and store then into lists,
 # and substitute images and masks in the code with those in the lists.
-parser.add_argument('--fs_lost_and_found', type=bool, default=True)
+parser.add_argument('--fs_lost_and_found', type=bool, default=False)
 parser.add_argument('--use_unprocessed_anomaly_scores_from_segment_open', type=bool, default=False)
 
+
+parser.add_argument('--threshold', type=float, default=math.inf,
+                    help='threshold for anormaly')
+
+parser.add_argument('--th_type', type=str, default='tpr')
+
+parser.add_argument('--save_mask_path', type=str,default='./results')
 
 def get_net():
     """
@@ -171,11 +180,82 @@ def progressBar(i, max, text):
         f"[{'=' * int(bar_size * j):{bar_size}s}] {int(100 * j)}%  {text}")
     sys.stdout.flush()
 
+def save_anormaly_mask(subfolder, file_name, a_score, th):
+    # Configurations
+    save_root = args.save_mask_path
+    save_file = os.path.join(save_root, subfolder)
+    os.makedirs(save_file, exist_ok=True)
+    save_file = os.path.join(save_file, file_name)
+
+    val = a_score.squeeze(0).cpu().numpy()
+    img = np.full(val.shape, 255, dtype=np.uint8)
+    img[val < th] = 0
+    img = Image.fromarray(img)
+    img.save(save_file)
+
+def save_anormaly_set(subfolder, file_name, a_score, image, orig_mask, th):
+    save_root = args.save_mask_path
+    save_file = os.path.join(save_root, subfolder)
+    os.makedirs(save_file, exist_ok=True)
+    save_file = os.path.join(save_file, file_name)
+
+    val = a_score.squeeze(0)
+    val = val.cpu().view(*val.shape, 1).expand(*val.shape, 3).numpy()
+    img = np.full(val.shape, 255, dtype=np.uint8)
+    img[val < th] = 0
+    img = np.concatenate((image, orig_mask, img), axis=1)
+    img = Image.fromarray(img)
+    img.save(save_file)
+
+
+def iter_over(save=False, th=None):
+    anomaly_score_list = []
+    ood_gts_list = []
+
+    anormaly_root = "/DATA2/gaoha/liumd/sml/sml/selfgen/selfgen/anomaly"
+
+    cities = os.listdir(anormaly_root)
+    for city in cities[:]:
+        city_path = os.path.join(anormaly_root, city)
+        for image_file in tqdm(os.listdir(os.path.join(city_path, "rgb_v"))[:]):
+            image_path = os.path.join(city_path, "rgb_v", image_file)
+            mask_path = os.path.join(city_path, "mask_v", image_file)
+
+            # 3 x H x W
+            orig_image = np.array(Image.open(image_path).convert('RGB')).astype('uint8')
+
+            orig_mask = Image.open(mask_path)
+            mask_copy = np.asarray(orig_mask).astype(np.uint32)
+            mask = mask_copy[:,:,0] + mask_copy[:,:,1] * 256 + mask_copy[:,:,2] * 256 * 256
+
+            seg_mask_copy = np.full(mask_copy.shape[:2], -1, dtype=int)
+            for k, v in id_to_trainid.items():
+                seg_mask_copy[mask == k] = v
+
+            assert seg_mask_copy.min() >= 0, "original image should be fully labelled @ " + mask_path
+            assert seg_mask_copy.max() < 23, "General Anormaly @ " +  mask_path
+            ood_gts = np.array(seg_mask_copy)
+
+            if not save:
+                ood_gts_list.append(np.expand_dims(ood_gts, 0))
+
+            with torch.no_grad():
+                image = preprocess_image(orig_image, mean_std)
+                main_out, anomaly_score = net(image)
+            del main_out
+
+            if not save:
+                anomaly_score_list.append(anomaly_score.cpu().numpy())
+            else:
+                save_anormaly_set(city, image_file, anomaly_score, orig_image, mask_copy.astype(np.uint8), th)
+    if not save:
+        return ood_gts_list, anomaly_score_list
 
 if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    print(args.snapshot)
     ############################################################################
     # get Fishyscapes LostAndFound images and masks
     # if args.fs_lost_and_found:
@@ -217,10 +297,10 @@ if __name__ == '__main__':
     #     device = cuda.get_current_device()
     #     device.reset()
     ############################################################################
-    ds = np.load('data.npz')
-    image_list = ds['arr_0']
-    mask_list = ds['arr_1']
-    num_images_in_fs_lost_and_found_ = len(image_list)
+    # ds = np.load('data.npz')
+    # image_list = ds['arr_0']
+    # mask_list = ds['arr_1']
+    # num_images_in_fs_lost_and_found_ = len(image_list)
 
     # Enable CUDNN Benchmarking optimization
     # torch.backends.cudnn.benchmark = True
@@ -259,79 +339,62 @@ if __name__ == '__main__':
 
     ############################################################################
     # FS LostAndFound
-    if args.fs_lost_and_found:
-        mean_std = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        anomaly_score_list = []
-        ood_gts_list = []
+    # if args.fs_lost_and_found:
+    #     mean_std = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    #     anomaly_score_list = []
+    #     ood_gts_list = []
 
-        # Iterate over all images
-        for i in range(len(image_list)):
-            progressBar(i, num_images_in_fs_lost_and_found_,
-                        'Evaluating on FS LostAndFound')
+    #     # Iterate over all images
+    #     for i in range(len(image_list)):
+    #         progressBar(i, num_images_in_fs_lost_and_found_,
+    #                     'Evaluating on FS LostAndFound')
 
-            # get the ith mask from the mask list
-            mask = mask_list[i]
+    #         # get the ith mask from the mask list
+    #         mask = mask_list[i]
 
-            # get the ith image from the image list
-            image = image_list[i]
-            image = image.astype('uint8')
+    #         # get the ith image from the image list
+    #         image = image_list[i]
+    #         image = image.astype('uint8')
 
-            ood_gts = mask
-            ood_gts_list.append(np.expand_dims(ood_gts, 0))
+    #         ood_gts = mask
+    #         ood_gts_list.append(np.expand_dims(ood_gts, 0))
 
-            with torch.no_grad():
-                image = preprocess_image(image, mean_std)
-                main_out, anomaly_score = net(image)
-                del main_out
-            anomaly_score_list.append(anomaly_score.cpu().numpy())
+    #         with torch.no_grad():
+    #             image = preprocess_image(image, mean_std)
+    #             main_out, anomaly_score = net(image)
+    #             del main_out
+    #         anomaly_score_list.append(anomaly_score.cpu().numpy())
                 
-        print()
-    ############################################################################
-    # If not evaluating on the FS LostAndFound, then evaluate on
-    # the dataset specified in args
-    else:
-        mean_std = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    #     print()
+    # ############################################################################
+    # # If not evaluating on the FS LostAndFound, then evaluate on
+    # # the dataset specified in args
+    # else:
+    from datasets.selfgen import std, mean
+    from datasets.selfgen_labels import rbg2num as id_to_trainid
 
-        ood_data_root = args.ood_dataset_path
-        image_root_path = os.path.join(ood_data_root, 'leftImg8bit_trainvaltest/leftImg8bit/val')
-        mask_root_path = os.path.join(ood_data_root, 'gtFine_trainvaltest/gtFine/val')
+    mean_std = (mean, std)
 
-        if not os.path.exists(image_root_path):
-            raise ValueError(f"Dataset directory {image_root_path} doesn't exist!")
+    # ood_data_root = args.ood_dataset_path
+    # image_root_path = os.path.join(ood_data_root, 'leftImg8bit_trainvaltest/leftImg8bit/val')
+    # mask_root_path = os.path.join(ood_data_root, 'gtFine_trainvaltest/gtFine/val')
 
-        anomaly_score_list = []
-        ood_gts_list = []
+    # if not os.path.exists(image_root_path):
+    #     raise ValueError(f"Dataset directory {image_root_path} doesn't exist!")
 
-        cities = os.listdir(image_root_path)
-        for city in cities:
-            city_path = os.path.join(image_root_path, city)
-            city_mask_path = os.path.join(mask_root_path, city)
-            for image_file in tqdm(os.listdir(city_path)):
-                mask_file = image_file.replace('leftImg8bit.png', 'gtFine_labelIds.png')
-                image_path = os.path.join(city_path, image_file)
-                mask_path = os.path.join(city_mask_path, mask_file)
+    if args.threshold:
+        if args.th_type == 'absolute':
+            iter_over(save=False, th=args.threshold)
+            exit(0)
+        
 
-                # 3 x H x W
-                image = np.array(Image.open(image_path).convert('RGB')).astype('uint8')
-
-                mask = Image.open(mask_path)
-                ood_gts = np.array(mask)
-
-                ood_gts_list.append(np.expand_dims(ood_gts, 0))
-
-                with torch.no_grad():
-                    image = preprocess_image(image, mean_std)
-                    main_out, anomaly_score = net(image)
-                del main_out
-
-                anomaly_score_list.append(anomaly_score.cpu().numpy())
-
+    ood_gts_list, anomaly_score_list = iter_over(save=False)
     ood_gts = np.array(ood_gts_list)
     anomaly_scores = np.array(anomaly_score_list)
 
     # drop void pixels
-    ood_mask = (ood_gts == 1)
-    ind_mask = (ood_gts == 0)
+    ood_mask = (ood_gts == 0)
+    ind_mask = (ood_gts != 0)
 
     ood_out = -1 * anomaly_scores[ood_mask]
     ind_out = -1 * anomaly_scores[ind_mask]
@@ -344,7 +407,17 @@ if __name__ == '__main__':
 
     print('Measuring metrics...')
 
-    fpr, tpr, _ = roc_curve(val_label, val_out)
+    fpr, tpr, ths = roc_curve(val_label, val_out)
+    
+    if args.threshold:
+        if args.th_type == 'tpr':
+            index = np.searchsorted(tpr, args.threshold)
+            selected_th = -ths[index]
+            print("Using th=", selected_th)
+            iter_over(save=True, th=selected_th)
+            exit(0)
+
+
 
     roc_auc = auc(fpr, tpr)
     precision, recall, _ = precision_recall_curve(val_label, val_out)

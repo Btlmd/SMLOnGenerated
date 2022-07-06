@@ -74,6 +74,13 @@ __C.DATASET.CITYSCAPES_AUG_DIR = ''
 __C.DATASET.CV_SPLITS = 3
 
 
+################
+# Self-Gen Dataset
+################
+
+__C.DATASET.SELFGENDIR = ''
+
+
 __C.MODEL = AttrDict()
 __C.MODEL.BN = 'pytorch-syncnorm'
 __C.MODEL.BNFUNC = torch.nn.SyncBatchNorm

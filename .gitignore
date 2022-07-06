@@ -141,3 +141,15 @@ pretrained/
 # json files
 *.json
 *.pth
+
+# specific logs
+c_*
+
+# selfgen dataset
+selfgen
+
+# mask results
+result*
+
+# FS LAF
+data.npz

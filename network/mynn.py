@@ -72,6 +72,7 @@ def forgiving_state_restore(net, loaded_dict):
     for k in net_state_dict:
         if k in loaded_dict and net_state_dict[k].size() == loaded_dict[k].size():
             new_loaded_dict[k] = loaded_dict[k]
+            print("Loaded parameter", k)
         else:
             print("Skipped loading parameter", k)
             # logging.info("Skipped loading parameter %s", k)
